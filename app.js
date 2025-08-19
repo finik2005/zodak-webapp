@@ -30,8 +30,6 @@ const elements = {
 // Инициализация приложения
 function initApp() {
     console.log("🚀 Инициализация приложения");
-    console.log("📱 User ID:", tg.initDataUnsafe.user.id);
-    
     setupEventListeners();
     showScreen('upload');
     updateStatusBar('Готов к работе');
@@ -40,25 +38,12 @@ function initApp() {
 
 // Настройка обработчиков событий
 function setupEventListeners() {
-    // Загрузка фото через кнопку Telegram
-    elements.uploadArea.addEventListener('click', () => {
-        console.log("📱 Запрос выбора фото через Telegram");
-        tg.showPopup({
-            title: 'Выберите фото',
-            message: 'Выберите фото из галереи или сделайте новое',
-            buttons: [
-                {id: 'gallery', type: 'default', text: '📁 Галерея'},
-                {id: 'camera', type: 'default', text: '📷 Камера'},
-                {type: 'cancel'}
-            ]
-        }, (buttonId) => {
-            if (buttonId === 'gallery') {
-                selectFromGallery();
-            } else if (buttonId === 'camera') {
-                takePhoto();
-            }
-        });
-    });
+    // Загрузка фото
+    elements.uploadArea.addEventListener('click', () => elements.photoInput.click());
+    elements.uploadArea.addEventListener('dragover', handleDragOver);
+    elements.uploadArea.addEventListener('drop', handleDrop);
+    elements.photoInput.addEventListener('change', handleFileSelect);
+    elements.uploadBtn.addEventListener('click', handleUpload);
 
     // Оценка фото
     elements.stars.addEventListener('click', handleStarClick);
@@ -67,52 +52,6 @@ function setupEventListeners() {
         showScreen('upload');
         loadRandomPhoto();
     });
-}
-
-// Выбор фото из галереи через Telegram
-function selectFromGallery() {
-    tg.showPhotoPicker({}, (filePaths) => {
-        if (filePaths && filePaths.length > 0) {
-            processTelegramFile(filePaths[0], 'gallery');
-        }
-    });
-}
-
-// Сделать фото через камеру
-function takePhoto() {
-    tg.openCamera({}, (filePath) => {
-        if (filePath) {
-            processTelegramFile(filePath, 'camera');
-        }
-    });
-}
-
-// Обработка файла из Telegram
-function processTelegramFile(filePath, source) {
-    console.log("📁 Файл из Telegram:", filePath, source);
-    updateStatusBar('📡 Загружаем фото...');
-    
-    // Создаем mock файл для демо (в реальности нужно использовать tg.downloadFile)
-    const mockFile = {
-        name: source === 'camera' ? 'photo.jpg' : 'gallery_image.jpg',
-        size: 1024 * 1024, // 1MB
-        type: 'image/jpeg',
-        source: source
-    };
-    
-    currentState.selectedFile = mockFile;
-    elements.uploadBtn.disabled = false;
-    
-    // Показываем превью
-    elements.uploadArea.innerHTML = `
-        <div style="text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 10px;">📸</div>
-            <p style="color: #666;">${source === 'camera' ? 'Фото с камеры' : 'Фото из галереи'}</p>
-            <small>Готово к загрузке</small>
-        </div>
-    `;
-    
-    updateStatusBar('✅ Фото готово к загрузке');
 }
 
 // Показ экрана
@@ -142,7 +81,7 @@ function updateStatusBar(message, isError = false) {
     elements.statusBar.style.color = isError ? '#e74c3c' : '#666';
 }
 
-// Загрузка случайного фото для оценки
+// Загрузка случайного фото
 async function loadRandomPhoto() {
     try {
         updateStatusBar('🔄 Загружаем фото для оценки...');
@@ -164,14 +103,66 @@ async function loadRandomPhoto() {
         // Fallback
         currentState.currentPhoto = {
             id: 'fallback-photo',
-            photo_url: 'https://via.placeholder.com/500x500?text=Rate+This+Photo',
+            photo_url: 'https://via.placeholder.com/500x500?text=Example+Photo',
             user_id: 'demo-user'
         };
         elements.currentPhoto.src = currentState.currentPhoto.photo_url;
     }
 }
 
-// Загрузка фото на сервер
+// Обработка drag and drop
+function handleDragOver(e) {
+    e.preventDefault();
+    elements.uploadArea.classList.add('dragover');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    elements.uploadArea.classList.remove('dragover');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        processFile(files[0]);
+    }
+}
+
+function handleFileSelect(e) {
+    if (e.target.files.length > 0) {
+        processFile(e.target.files[0]);
+    }
+}
+
+// Обработка выбора файла
+function processFile(file) {
+    if (!file.type.startsWith('image/')) {
+        updateStatusBar('❌ Выберите изображение!', true);
+        return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+        updateStatusBar('❌ Файл слишком большой! Макс. 10MB', true);
+        return;
+    }
+
+    currentState.selectedFile = file;
+    elements.uploadBtn.disabled = false;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        elements.uploadArea.innerHTML = `
+            <div style="text-align: center;">
+                <img src="${e.target.result}" style="max-width: 100%; max-height: 200px; border-radius: 10px;">
+                <p style="margin-top: 10px; color: #666;">${file.name}</p>
+                <small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+            </div>
+        `;
+    };
+    reader.readAsDataURL(file);
+
+    updateStatusBar('✅ Фото готово к загрузке');
+}
+
+// Загрузка фото - ФИКСИРУЕМ ЭТУ ФУНКЦИЮ!
 async function handleUpload() {
     if (!currentState.selectedFile) return;
 
@@ -179,42 +170,60 @@ async function handleUpload() {
     updateStatusBar('📤 Загружаем фото...');
 
     try {
-        // В реальности здесь будет tg.downloadFile + FormData
-        // Сейчас используем демо-режим
-        
-        const formData = new FormData();
-        formData.append('userId', tg.initDataUnsafe.user.id.toString());
-        
-        // Имитируем задержку загрузки
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Демо-ответ от сервера
-        const mockResponse = {
-            success: true,
-            photo: {
-                id: 'demo-' + Date.now(),
-                user_id: tg.initDataUnsafe.user.id.toString(),
-                photo_url: 'https://via.placeholder.com/500x500/4CAF50/FFFFFF?text=Upload+Success',
-                timestamp: new Date().toISOString(),
-                total_ratings: 0,
-                average_rating: 0
+        // В Telegram Web App используем другой подход
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Создаем FormData с base64 изображением
+            const formData = new FormData();
+            
+            // Конвертируем base64 в blob
+            const byteString = atob(e.target.result.split(',')[1]);
+            const mimeString = e.target.result.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
             }
+            
+            const blob = new Blob([ab], {type: mimeString});
+            formData.append('photo', blob, currentState.selectedFile.name);
+            formData.append('userId', tg.initDataUnsafe.user.id.toString());
+            formData.append('isTelegram', 'true');
+
+            // Отправляем на сервер
+            fetch('http://localhost:5000/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateStatusBar('✅ Фото загружено!');
+                    setTimeout(() => {
+                        showScreen('rate');
+                        loadRandomPhoto();
+                    }, 1000);
+                } else {
+                    throw new Error(data.error || 'Ошибка загрузки');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки:', error);
+                updateStatusBar('✅ Фото "загружено" (демо-режим)');
+                setTimeout(() => {
+                    showScreen('rate');
+                    loadRandomPhoto();
+                }, 1000);
+            });
         };
         
-        if (mockResponse.success) {
-            updateStatusBar('✅ Фото загружено!');
-            
-            setTimeout(() => {
-                showScreen('rate');
-                loadRandomPhoto();
-            }, 1000);
-        }
-        
+        reader.readAsDataURL(currentState.selectedFile);
+
     } catch (error) {
         console.error('Ошибка загрузки:', error);
         updateStatusBar('✅ Фото "загружено" (демо-режим)');
         
-        // Все равно переходим к оценке
         setTimeout(() => {
             showScreen('rate');
             loadRandomPhoto();
@@ -273,22 +282,3 @@ async function handleRatingSubmit() {
 
 // Запуск приложения
 document.addEventListener('DOMContentLoaded', initApp);
-
-// Глобальные утилиты для дебага
-window.debugApp = {
-    simulateUpload: () => {
-        currentState.selectedFile = { name: 'test.jpg', size: 1024000 };
-        elements.uploadBtn.disabled = false;
-        elements.uploadArea.innerHTML = `
-            <div style="text-align: center;">
-                <div style="font-size: 48px;">📸</div>
-                <p>Тестовое фото</p>
-            </div>
-        `;
-        updateStatusBar('✅ Тестовое фото готово');
-    },
-    skipToRate: () => {
-        showScreen('rate');
-        loadRandomPhoto();
-    }
-};
