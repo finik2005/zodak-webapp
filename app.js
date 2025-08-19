@@ -12,6 +12,13 @@ let currentState = {
     uploadedPhotos: []
 };
 
+let ratedPhotos = [];
+let userStats = {
+    photos_uploaded: 0,
+    ratings_given: 0,
+    photos_remaining: 0
+};
+
 // Элементы DOM
 const elements = {
     uploadScreen: document.getElementById('upload-screen'),
@@ -34,6 +41,7 @@ function initApp() {
     setupEventListeners();
     showScreen('upload');
     updateStatusBar('Готов к работе');
+    loadUserStats();
 }
 
 // Настройка обработчиков событий
@@ -82,47 +90,98 @@ function updateStatusBar(message, isError = false) {
     elements.statusBar.style.color = isError ? '#e74c3c' : '#666';
 }
 
+// Загрузка статистики пользователя
+async function loadUserStats() {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id?.toString();
+        if (userId) {
+            const response = await fetch(`http://localhost:5000/stats/${userId}`);
+            const data = await response.json();
+            if (data.success) {
+                userStats = data.stats;
+                console.log("📊 Статистика пользователя:", userStats);
+            }
+        }
+    } catch (error) {
+        console.log('Не удалось загрузить статистику');
+    }
+}
+
 // Загрузка случайного фото
 async function loadRandomPhoto() {
     try {
-        updateStatusBar('🔄 Загружаем фото для оценки...');
+        updateStatusBar('🔄 Ищем фото для оценки...');
         
-        // Пробуем получить фото с сервера
+        const userId = tg.initDataUnsafe?.user?.id?.toString() || 'unknown';
+        
+        // Пробуем получить неоцененное фото с сервера
         try {
-            const response = await fetch('http://localhost:5000/get_photo');
+            const response = await fetch(`http://localhost:5000/get_unrated_photo/${userId}`);
             const data = await response.json();
             
             if (data.success && data.photo) {
                 currentState.currentPhoto = data.photo;
                 elements.currentPhoto.src = data.photo.photo_url;
-                updateStatusBar('✅ Фото загружено! Оцените его');
+                updateStatusBar('✅ Новое фото для оценки!');
                 return;
             }
-        } catch (serverError) {
-            console.log('Сервер недоступен, используем локальные фото');
+            
+            if (data.error === 'no_more_photos') {
+                showNoMorePhotosScreen();
+                return;
+            }
+        } catch (error) {
+            console.log('Сервер недоступен, пробуем локально');
         }
         
-        // Fallback на локальные фото
-        if (currentState.uploadedPhotos.length > 0) {
-            const randomIndex = Math.floor(Math.random() * currentState.uploadedPhotos.length);
-            currentState.currentPhoto = currentState.uploadedPhotos[randomIndex];
-            elements.currentPhoto.src = currentState.currentPhoto.photo_url;
-            updateStatusBar('✅ Локальное фото загружено!');
+        // Локальная логика для fallback
+        const unratedPhotos = currentState.uploadedPhotos.filter(photo => 
+            !ratedPhotos.includes(photo.id)
+        );
+        
+        if (unratedPhotos.length > 0) {
+            const randomPhoto = unratedPhotos[Math.floor(Math.random() * unratedPhotos.length)];
+            currentState.currentPhoto = randomPhoto;
+            elements.currentPhoto.src = randomPhoto.photo_url;
+            updateStatusBar('✅ Локальное фото для оценки!');
         } else {
-            // Демо фото если нет своих
-            currentState.currentPhoto = {
-                id: 'demo_photo',
-                photo_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><rect width="500" height="500" fill="#4CAF50"/><text x="250" y="250" font-family="Arial" font-size="20" fill="white" text-anchor="middle">Загрузи первое фото!</text></svg>',
-                user_id: 'system'
-            };
-            elements.currentPhoto.src = currentState.currentPhoto.photo_url;
-            updateStatusBar('✅ Демо фото готово!');
+            showNoMorePhotosScreen();
         }
         
     } catch (error) {
         console.error('Ошибка загрузки фото:', error);
-        updateStatusBar('⚠️ Ошибка загрузки фото', true);
+        showNoMorePhotosScreen();
     }
+}
+
+// Экран "нет больше фото"
+function showNoMorePhotosScreen() {
+    // Скрываем все стандартные экраны
+    elements.uploadScreen.style.display = 'none';
+    elements.rateScreen.style.display = 'none';
+    elements.thanksScreen.style.display = 'none';
+    
+    // Создаем экран "нет фото"
+    const noPhotosScreen = document.createElement('div');
+    noPhotosScreen.className = 'screen active';
+    noPhotosScreen.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+            <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+            <h2>Вы оценили все фото!</h2>
+            <p>Спасибо за ваши оценки!</p>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <p style="margin: 5px 0;">📊 <strong>Ваша статистика:</strong></p>
+                <p style="margin: 5px 0;">✅ Оценено фото: ${userStats.ratings_given || ratedPhotos.length}</p>
+                <p style="margin: 5px 0;">📸 Ваших фото: ${userStats.photos_uploaded || currentState.uploadedPhotos.length}</p>
+            </div>
+            <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 20px;">
+                🔄 Обновить ленту
+            </button>
+        </div>
+    `;
+    
+    document.querySelector('.main-content').appendChild(noPhotosScreen);
+    updateStatusBar('✅ Вы оценили все доступные фото!');
 }
 
 // Обработка drag and drop
@@ -203,14 +262,17 @@ async function handleUpload() {
             const data = await response.json();
             
             if (data.success) {
-                updateStatusBar('✅ Фото загружено на сервер!');
+                updateStatusBar('✅ Фото загружено! Теперь можете оценивать другие фото');
+                // Обновляем статистику
+                userStats.photos_uploaded = (userStats.photos_uploaded || 0) + 1;
             } else {
-                throw new Error('Server error');
+                updateStatusBar(data.error || 'Ошибка загрузки', true);
+                elements.uploadBtn.disabled = false;
+                return;
             }
             
         } catch (error) {
             console.log('Сервер недоступен, сохраняем локально');
-            // Сохраняем локально
             const localPhoto = {
                 id: 'local_' + Date.now(),
                 user_id: userId,
@@ -222,13 +284,19 @@ async function handleUpload() {
             };
             
             currentState.uploadedPhotos.push(localPhoto);
-            updateStatusBar('✅ Фото сохранено локально!');
+            updateStatusBar('✅ Фото сохранено! Теперь можете оценивать другие фото');
+            userStats.photos_uploaded = (userStats.photos_uploaded || 0) + 1;
         }
         
-        // В любом случае переходим к оценке
-        setTimeout(() => {
-            showScreen('rate');
-        }, 1000);
+        // Сбрасываем форму
+        currentState.selectedFile = null;
+        elements.uploadArea.innerHTML = `
+            <div class="upload-placeholder">
+                <span class="upload-icon">📁</span>
+                <p>Перетащите сюда фото или нажмите для загрузки</p>
+                <small>Макс. размер: 10MB</small>
+            </div>
+        `;
     };
     
     reader.readAsDataURL(currentState.selectedFile);
@@ -249,6 +317,7 @@ function handleStarClick(e) {
     }
 }
 
+// Отправка оценки
 async function handleRatingSubmit() {
     if (!currentState.currentRating || !currentState.currentPhoto) return;
 
@@ -256,28 +325,79 @@ async function handleRatingSubmit() {
     updateStatusBar('📨 Отправляем оценку...');
 
     try {
-        // Пробуем отправить оценку на сервер
+        const userId = tg.initDataUnsafe?.user?.id?.toString() || 'unknown';
+        const photoId = currentState.currentPhoto.id;
+        
+        // Пробуем отправить на сервер
         const response = await fetch('http://localhost:5000/rate', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                photoId: currentState.currentPhoto.id,
+                photoId: photoId,
                 rating: currentState.currentRating,
-                userId: tg.initDataUnsafe?.user?.id?.toString() || 'unknown'
+                userId: userId
             })
         });
         
-        await response.json();
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.log('Ошибка отправки оценки:', data.error);
+        }
         
     } catch (error) {
-        console.log('Оценка сохранена локально');
+        console.log('Сервер недоступен, сохраняем локально');
     }
     
-    showScreen('thanks');
-    updateStatusBar('✅ Оценка отправлена!');
+    // Добавляем фото в список оцененных
+    ratedPhotos.push(currentState.currentPhoto.id);
+    userStats.ratings_given = (userStats.ratings_given || 0) + 1;
+    
+    // Сбрасываем оценку
+    currentState.currentRating = 0;
+    document.querySelectorAll('.star').forEach(star => {
+        star.classList.remove('active');
+    });
+    elements.ratingValue.textContent = '0/10';
+    
+    // Сразу загружаем следующее фото
+    loadRandomPhoto();
 }
 
 // Запуск приложения
 document.addEventListener('DOMContentLoaded', initApp);
+
+// Глобальные функции для дебага
+window.debugApp = {
+    forceRateScreen: function() {
+        showScreen('rate');
+    },
+    testUpload: function() {
+        currentState.selectedFile = { name: 'test.jpg', size: 1024000 };
+        elements.uploadBtn.disabled = false;
+        elements.uploadArea.innerHTML = `
+            <div style="text-align: center;">
+                <div style="font-size: 48px;">📸</div>
+                <p>Тестовое фото</p>
+            </div>
+        `;
+        updateStatusBar('✅ Тестовое фото готово');
+    },
+    resetRatings: function() {
+        ratedPhotos = [];
+        userStats.ratings_given = 0;
+        updateStatusBar('✅ Оценки сброшены');
+        loadRandomPhoto();
+    },
+    getStats: function() {
+        return {
+            ratedPhotos: ratedPhotos,
+            userStats: userStats,
+            uploadedPhotos: currentState.uploadedPhotos
+        };
+    }
+};
+
+console.log("🔧 Debug mode: window.debugApp доступен");
