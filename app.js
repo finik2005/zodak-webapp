@@ -1,3 +1,11 @@
+function initApp() {
+    console.log("🚀 Инициализация приложения");
+    console.log("📱 Telegram WebApp data:", tg.initDataUnsafe);
+    console.log("👤 User data:", tg.initDataUnsafe.user);
+    console.log("🔗 Init data:", tg.initData);
+
+    // ... остальной код
+}
 // Инициализация Telegram Web App
 const tg = window.Telegram.WebApp;
 tg.expand();
@@ -85,10 +93,10 @@ function updateStatusBar(message, isError = false) {
 async function loadRandomPhoto() {
     try {
         updateStatusBar('🔄 Загружаем фото для оценки...');
-        
+
         const response = await fetch('http://localhost:5000/get_photo');
         const data = await response.json();
-        
+
         if (data.success && data.photo) {
             currentState.currentPhoto = data.photo;
             elements.currentPhoto.src = data.photo.photo_url;
@@ -99,7 +107,7 @@ async function loadRandomPhoto() {
     } catch (error) {
         console.error('Ошибка загрузки фото:', error);
         updateStatusBar('⚠️ Используем тестовое фото', true);
-        
+
         // Fallback
         currentState.currentPhoto = {
             id: 'fallback-photo',
@@ -119,7 +127,7 @@ function handleDragOver(e) {
 function handleDrop(e) {
     e.preventDefault();
     elements.uploadArea.classList.remove('dragover');
-    
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
         processFile(files[0]);
@@ -146,7 +154,7 @@ function processFile(file) {
 
     currentState.selectedFile = file;
     elements.uploadBtn.disabled = false;
-    
+
     const reader = new FileReader();
     reader.onload = function(e) {
         elements.uploadArea.innerHTML = `
@@ -175,20 +183,32 @@ async function handleUpload() {
         reader.onload = function(e) {
             // Создаем FormData с base64 изображением
             const formData = new FormData();
-            
+
             // Конвертируем base64 в blob
             const byteString = atob(e.target.result.split(',')[1]);
             const mimeString = e.target.result.split(',')[0].split(':')[1].split(';')[0];
             const ab = new ArrayBuffer(byteString.length);
             const ia = new Uint8Array(ab);
-            
+
             for (let i = 0; i < byteString.length; i++) {
                 ia[i] = byteString.charCodeAt(i);
             }
-            
+
             const blob = new Blob([ab], {type: mimeString});
             formData.append('photo', blob, currentState.selectedFile.name);
-            formData.append('userId', tg.initDataUnsafe.user.id.toString());
+            // Правильное получение user_id из Telegram Web App
+let userId = 'unknown-user';
+try {
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        userId = tg.initDataUnsafe.user.id.toString();
+    } else if (tg.initDataUnsafe && tg.initDataUnsafe.query_id) {
+        // Альтернативный способ получения ID
+        userId = tg.initDataUnsafe.query_id;
+    }
+} catch (e) {
+    console.warn('Не удалось получить user ID:', e);
+}
+formData.append('userId', userId);
             formData.append('isTelegram', 'true');
 
             // Отправляем на сервер
@@ -217,13 +237,13 @@ async function handleUpload() {
                 }, 1000);
             });
         };
-        
+
         reader.readAsDataURL(currentState.selectedFile);
 
     } catch (error) {
         console.error('Ошибка загрузки:', error);
         updateStatusBar('✅ Фото "загружено" (демо-режим)');
-        
+
         setTimeout(() => {
             showScreen('rate');
             loadRandomPhoto();
