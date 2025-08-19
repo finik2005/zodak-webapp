@@ -27,6 +27,45 @@ const elements = {
     statusBar: document.getElementById('status-bar')
 };
 
+// База демо-фото
+const demoPhotos = [
+    {
+        id: 'photo-1',
+        user_id: 'user-1',
+        photo_url: 'https://via.placeholder.com/500x500/FF6B6B/FFFFFF?text=Awesome+Sunset',
+        total_ratings: 42,
+        average_rating: 8.7
+    },
+    {
+        id: 'photo-2', 
+        user_id: 'user-2',
+        photo_url: 'https://via.placeholder.com/500x500/4ECDC4/FFFFFF?text=Nature+Beauty',
+        total_ratings: 28,
+        average_rating: 9.2
+    },
+    {
+        id: 'photo-3',
+        user_id: 'user-3',
+        photo_url: 'https://via.placeholder.com/500x500/45B7D1/FFFFFF?text=City+Lights',
+        total_ratings: 35,
+        average_rating: 7.8
+    },
+    {
+        id: 'photo-4',
+        user_id: 'user-4',
+        photo_url: 'https://via.placeholder.com/500x500/96CEB4/FFFFFF?text=Ocean+View',
+        total_ratings: 51,
+        average_rating: 8.9
+    },
+    {
+        id: 'photo-5',
+        user_id: 'user-5',
+        photo_url: 'https://via.placeholder.com/500x500/FECA57/FFFFFF?text=Mountains',
+        total_ratings: 19,
+        average_rating: 6.5
+    }
+];
+
 // Инициализация приложения
 function initApp() {
     console.log("🚀 Инициализация приложения");
@@ -49,7 +88,7 @@ function setupEventListeners() {
     elements.submitRating.addEventListener('click', handleRatingSubmit);
     elements.rateAnother.addEventListener('click', () => {
         showScreen('upload');
-        loadRandomPhoto();
+        updateStatusBar('Готов к работе');
     });
 }
 
@@ -65,6 +104,7 @@ function showScreen(screenName) {
             break;
         case 'rate':
             elements.rateScreen.classList.add('active');
+            loadRandomPhoto();
             break;
         case 'thanks':
             elements.thanksScreen.classList.add('active');
@@ -81,34 +121,27 @@ function updateStatusBar(message, isError = false) {
 }
 
 // Загрузка случайного фото
-async function loadRandomPhoto() {
+function loadRandomPhoto() {
     try {
-        updateStatusBar('🔄 Загружаем фото для оценки...');
+        updateStatusBar('🔄 Загружаем фото...');
         
-        // Всегда используем тестовое фото
-        currentState.currentPhoto = {
-            id: 'demo-photo-' + Date.now(),
-            user_id: 'demo-user',
-            photo_url: 'https://via.placeholder.com/500x500/4CAF50/FFFFFF?text=Rate+This+Photo',
-            timestamp: new Date().toISOString(),
-            total_ratings: Math.floor(Math.random() * 100) + 1,
-            average_rating: (Math.random() * 5 + 5).toFixed(1),
-            status: 'active'
-        };
+        // Выбираем случайное фото из демо-базы
+        const randomIndex = Math.floor(Math.random() * demoPhotos.length);
+        currentState.currentPhoto = demoPhotos[randomIndex];
         
         elements.currentPhoto.src = currentState.currentPhoto.photo_url;
-        updateStatusBar('✅ Фото загружено! Оцените его');
+        elements.currentPhoto.onload = () => {
+            updateStatusBar('✅ Фото загружено! Оцените его');
+        };
+        
+        elements.currentPhoto.onerror = () => {
+            elements.currentPhoto.src = 'https://via.placeholder.com/500x500/FF6B6B/FFFFFF?text=Error+Loading';
+            updateStatusBar('✅ Фото готово к оценке!');
+        };
         
     } catch (error) {
         console.error('Ошибка загрузки фото:', error);
-        
-        // Fallback
-        currentState.currentPhoto = {
-            id: 'fallback-photo',
-            photo_url: 'https://via.placeholder.com/500x500/FF6B6B/FFFFFF?text=Rate+Me',
-            user_id: 'demo-user'
-        };
-        elements.currentPhoto.src = currentState.currentPhoto.photo_url;
+        elements.currentPhoto.src = 'https://via.placeholder.com/500x500/5C6BC0/FFFFFF?text=Rate+Me';
         updateStatusBar('✅ Демо фото готово!');
     }
 }
@@ -166,31 +199,22 @@ function processFile(file) {
 }
 
 // Загрузка фото
-async function handleUpload() {
+function handleUpload() {
     if (!currentState.selectedFile) return;
 
     elements.uploadBtn.disabled = true;
     updateStatusBar('📤 Загружаем фото...');
 
-    try {
-        // Имитируем загрузку
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Всегда успешный результат
+    // Имитируем загрузку
+    setTimeout(() => {
         updateStatusBar('✅ Фото загружено!');
         
-        // Немедленно переходим к оценке
-        showScreen('rate');
-        loadRandomPhoto();
+        // Переходим к оценке
+        setTimeout(() => {
+            showScreen('rate');
+        }, 1000);
         
-    } catch (error) {
-        console.error('Ошибка загрузки:', error);
-        updateStatusBar('✅ Фото загружено!');
-        
-        // Все равно переходим к оценке
-        showScreen('rate');
-        loadRandomPhoto();
-    }
+    }, 1500);
 }
 
 // Оценка фото
@@ -208,24 +232,17 @@ function handleStarClick(e) {
     }
 }
 
-async function handleRatingSubmit() {
+function handleRatingSubmit() {
     if (!currentState.currentRating || !currentState.currentPhoto) return;
 
     elements.submitRating.disabled = true;
     updateStatusBar('📨 Отправляем оценку...');
 
-    try {
-        // Имитируем отправку оценки
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+    // Имитируем отправку
+    setTimeout(() => {
         showScreen('thanks');
         updateStatusBar('✅ Оценка отправлена!');
-        
-    } catch (error) {
-        console.error('Ошибка оценки:', error);
-        updateStatusBar('✅ Спасибо за оценку!');
-        showScreen('thanks');
-    }
+    }, 1000);
 }
 
 // Запуск приложения
@@ -235,7 +252,6 @@ document.addEventListener('DOMContentLoaded', initApp);
 window.debugApp = {
     forceRateScreen: function() {
         showScreen('rate');
-        loadRandomPhoto();
     },
     testUpload: function() {
         currentState.selectedFile = { name: 'test.jpg', size: 1024000 };
@@ -249,3 +265,5 @@ window.debugApp = {
         updateStatusBar('✅ Тестовое фото готово');
     }
 };
+
+console.log("🔧 Приложение загружено! Debug: window.debugApp");
