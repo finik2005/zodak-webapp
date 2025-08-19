@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoRater - Оцени фото!</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Заголовок -->
+        <header class="header">
+            <h1>📸 PhotoRater</h1>
+            <p>Загружай фото и получай оценки от сообщества!</p>
+        </header>
+
+        <!-- Основной контент -->
+        <main class="main-content">
+            <!-- Экран загрузки фото -->
+            <div id="upload-screen" class="screen active">
+                <div class="upload-area" id="upload-area">
+                    <input type="file" id="photo-input" accept="image/*" hidden>
+                    <div class="upload-placeholder">
+                        <span class="upload-icon">📁</span>
+                        <p>Перетащи сюда фото или нажми для загрузки</p>
+                        <small>Макс. размер: 10MB</small>
+                    </div>
+                </div>
+                <button id="upload-btn" class="btn btn-primary" disabled>Загрузить фото</button>
+            </div>
+
+            <!-- Экран оценки фото -->
+            <div id="rate-screen" class="screen">
+                <div class="photo-container">
+                    <img id="current-photo" src="" alt="Фото для оценки">
+                </div>
+                <div class="rating-controls">
+                    <h3>Оцени фото:</h3>
+                    <div class="rating-stars">
+                        <div class="stars" id="stars">
+                            <span class="star" data-value="1">⭐</span>
+                            <span class="star" data-value="2">⭐</span>
+                            <span class="star" data-value="3">⭐</span>
+                            <span class="star" data-value="4">⭐</span>
+                            <span class="star" data-value="5">⭐</span>
+                            <span class="star" data-value="6">⭐</span>
+                            <span class="star" data-value="7">⭐</span>
+                            <span class="star" data-value="8">⭐</span>
+                            <span class="star" data-value="9">⭐</span>
+                            <span class="star" data-value="10">⭐</span>
+                        </div>
+                        <div class="rating-value" id="rating-value">0/10</div>
+                    </div>
+                    <button id="submit-rating" class="btn btn-primary" disabled>Отправить оценку</button>
+                </div>
+            </div>
+
+            <!-- Экран благодарности -->
+            <div id="thanks-screen" class="screen">
+                <div class="thank-you">
+                    <h2>✅ Спасибо за оценку!</h2>
+                    <p>Твой вклад помогает сообществу</p>
+                    <button id="rate-another" class="btn btn-secondary">Оценить еще</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Статус бар -->
+        <div class="status-bar" id="status-bar"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
